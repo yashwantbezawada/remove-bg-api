@@ -1,0 +1,2 @@
+docker build -t remove-bg-api .
+docker run -d --gpus all -p 8000:8000 --restart unless-stopped remove-bg-api
