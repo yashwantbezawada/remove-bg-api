@@ -9,6 +9,7 @@ import torch
 from transformers import AutoModelForImageSegmentation
 from torchvision import transforms
 import asyncio
+import gc
 
 app = FastAPI()
 
@@ -31,6 +32,7 @@ transform_image = transforms.Compose([
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
+
 # The actual image processing logic is kept synchronous but handled in a separate thread
 def process_image(image: Image.Image):
     original_size = image.size
@@ -42,11 +44,17 @@ def process_image(image: Image.Image):
     # Apply transformations and keep in float32 (default)
     input_tensor = transform_image(image).unsqueeze(0).to(device)
 
-    with torch.no_grad():
-        preds = birefnet(input_tensor)[-1].sigmoid().cpu()
+    try:
+        with torch.no_grad():
+            preds = birefnet(input_tensor)[-1].sigmoid().cpu().detach()
 
-    pred_mask = preds[0].squeeze()
-    mask = transforms.ToPILImage()(pred_mask)
+        pred_mask = preds[0].squeeze()
+        mask = transforms.ToPILImage()(pred_mask)
+    finally:
+        # Explicitly delete tensors and clear cache
+        del input_tensor, preds
+        torch.cuda.empty_cache()
+        gc.collect()
 
     mask_resized = mask.resize(original_size)
 
@@ -56,10 +64,12 @@ def process_image(image: Image.Image):
 
     return white_mask
 
+
 # Function to extract the object mask and resize to original image size
 async def extract_object(image: Image.Image):
     # Run the processing in a separate thread using asyncio.to_thread()
     return await asyncio.to_thread(process_image, image)
+
 
 @app.post("/remove-background/")
 async def remove_background(file: UploadFile = File(None)):
@@ -86,6 +96,7 @@ async def remove_background(file: UploadFile = File(None)):
     except Exception as e:
         logger.error(f"Error processing the image: {e}")
         raise HTTPException(status_code=500, detail="Error processing the image.")
+
 
 @app.post("/bulk-processing/")
 async def bulk_processing(file: UploadFile = File(...)):
@@ -131,9 +142,11 @@ async def bulk_processing(file: UploadFile = File(...)):
 
                     logger.info("Successfully processed %s in %.2f seconds", image_name,
                                 time.time() - image_start_time)
-                except Exception as e:
-                    logger.error("Error processing file %s. Error: %s", image_name, e)
-                    continue
+                finally:
+                    # Release resources and clear cache
+                    mask.close()
+                    torch.cuda.empty_cache()
+                    gc.collect()
 
     # Finalize the output ZIP
     output_zip.seek(0)
@@ -158,6 +171,8 @@ async def preflight_handler(request: Request, path: str):
         }
     )
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
