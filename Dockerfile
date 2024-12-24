@@ -20,4 +20,4 @@ COPY app.py .
 EXPOSE 8000
 
 # Command to run the FastAPI app with Gunicorn and Uvicorn workers in production
-CMD ["gunicorn", "-w", "9", "-k", "uvicorn.workers.UvicornWorker", "app:app", "--bind", "0.0.0.0:8000"]
+CMD ["gunicorn", "-w", "1", "-k", "uvicorn.workers.UvicornWorker", "app:app", "--bind", "0.0.0.0:8000"]
