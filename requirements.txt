@@ -36,3 +36,4 @@ transformers==4.45.2
 typing_extensions==4.9.0
 urllib3==2.2.3
 uvicorn==0.31.1
+einops
