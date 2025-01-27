@@ -86,16 +86,16 @@ def choose_resize_dim() -> int:
         return 512
 
     usage_percent = get_gpu_usage_percent_cached()
-    if usage_percent < 20:
+    if usage_percent < 60:
         return 1024
-    elif usage_percent < 40:
-        return 768
-    elif usage_percent < 60:
-        return 512
+    elif usage_percent < 70:
+        return 896
     elif usage_percent < 80:
-        return 384
+        return 768
+    elif usage_percent < 90:
+        return 640
     else:
-        return 256
+        return 512
 
 ##############################################################################
 # MAIN: GPU-based resizing + single-step alpha creation
